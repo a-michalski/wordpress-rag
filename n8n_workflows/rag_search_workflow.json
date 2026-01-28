@@ -1,0 +1,165 @@
+{
+  "name": "RAG Search -> LLM (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "rag-search",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "requestMethod": "POST",
+        "url": "https://mobby-rag-search-api.hf.space/search",
+        "jsonParameters": true,
+        "bodyParametersJson": [
+          {
+            "name": "query",
+            "value": "={{$node[\"Webhook\"].json[\"body\"][\"question\"]}}"
+          },
+          {
+            "name": "top_k",
+            "value": "=5"
+          }
+        ],
+        "headerParametersJson": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{$env.RAG_API_TOKEN}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "options": {
+          "bodyContentType": "json",
+          "responseFormat": "json"
+        }
+      },
+      "name": "Call RAG API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "prompt",
+              "value": "=The user asked:\n{{$node[\"Webhook\"].json[\"body\"][\"question\"]}}\n\nUse the following RAG context:\n{{$json}}\n\nAnswer concisely in Polish."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "requestMethod": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "jsonParameters": true,
+        "bodyParametersJson": [
+          {
+            "name": "model",
+            "value": "gpt-4o-mini"
+          },
+          {
+            "name": "messages",
+            "value": "=[{\\"role\\":\\"user\\",\\"content\\":{{$json[\\"prompt\\"]}}}]"
+          },
+          {
+            "name": "max_tokens",
+            "value": "=500"
+          }
+        ],
+        "headerParametersJson": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{$env.OPENAI_KEY}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "options": {
+          "bodyContentType": "json",
+          "responseFormat": "json"
+        }
+      },
+      "name": "Call LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "responseBody": "={{$json[\"choices\"] && $json[\"choices\"][0] && $json[\"choices\"][0].message ? $json[\"choices\"][0].message.content : ($json[\"choices\"][0] && $json[\"choices\"][0].text) || JSON.stringify($json)}}"
+      },
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call RAG API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call RAG API": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call LLM": {
+      "main": [
+        [
+          {
+            "node": "Return Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

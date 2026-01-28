@@ -1,0 +1,343 @@
+{
+  "name": "Polish AI Agent with RAG Search and Contextual Response Generation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag-agent",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "2e2db8f6-9fbd-4b79-93cb-df2ae2d4f30a",
+      "name": "Webhook: RAG Question1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        656,
+        1528
+      ],
+      "webhookId": "da471687-713a-4444-af3c-844030c5325d"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "anthropic/claude-3.5-sonnet"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "def9e6bf-0f92-4318-8f27-baa2deb73581",
+      "name": "OpenRouter: Analyze Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        1752
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "oUzECR7JM8Hc13Hm",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Analyzes the user question and determines optimal RAG search parameters including top_k value (10-15)",
+        "jsCode": "const question = $fromAI('question', 'User question', 'string');\nconst lowerQ = question.toLowerCase();\nconst result = { query: question, top_k: 10 };\nif (lowerQ.includes('szczegół') || lowerQ.includes('jak')) result.top_k = 15;\nelse if (lowerQ.includes('przykład')) result.top_k = 12;\nreturn JSON.stringify(result, null, 2);"
+      },
+      "id": "279baa2f-4c45-4acb-91cf-770016011dcb",
+      "name": "Code Tool: Build RAG Parameters1",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1008,
+        1752
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"query\": {\n      \"type\": \"string\",\n      \"description\": \"The search query text\"\n    },\n    \"top_k\": {\n      \"type\": \"number\",\n      \"description\": \"Number of results to retrieve (10-15)\"\n    }\n  },\n  \"required\": [\"query\", \"top_k\"]\n}"
+      },
+      "id": "ad6f2f0e-5938-40e7-a702-a3e0e8d2497b",
+      "name": "Structured Output Parser1",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1136,
+        1752
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.question }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Jesteś ekspertem analizy zapytań użytkowników dla systemu RAG. Twoim zadaniem jest przeanalizowanie pytania użytkownika i określenie optymalnych parametrów wyszukiwania.\n\nPytanie użytkownika: {{ $json.body.question }}\n\nPrzeanalizuj pytanie i użyj narzędzia Build RAG Parameters aby określić:\n1. Liczbę wyników do pobrania (top_k: 10-15)\n2. Strategię wyszukiwania\n\nZwróć strukturę JSON z parametrami wyszukiwania (query i top_k)."
+        }
+      },
+      "id": "35e5cd44-d781-44ba-ae5f-52e00f1ce86a",
+      "name": "AI Agent: Analyze Question1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        936,
+        1528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mobby-rag-search-api.hf.space/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $env.HF_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.output }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "5b264885-dd34-4817-ad05-43e94b5a29e2",
+      "name": "HTTP Request: RAG Search1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1344,
+        1528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.item.json;\nif (!r || r.error) return {json: {context: `Błąd RAG: ${r?.error}`, hasResults: false, resultCount: 0}};\nif (!r.results || r.results.length === 0) return {json: {context: 'Brak wyników. Przeformułuj pytanie.', hasResults: false, resultCount: 0}};\nreturn {json: r};"
+      },
+      "id": "68b0f452-0580-4765-bf23-80c411b2d242",
+      "name": "Code: Check API Errors",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        1528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format RAG search results into readable context\nconst results = $input.item.json.results || $input.item.json;\n\nif (!results || !Array.isArray(results) || results.length === 0) {\n  return {\n    json: {\n      context: 'Brak wyników wyszukiwania. System RAG nie znalazł odpowiednich artykułów.',\n      hasResults: false,\n      resultCount: 0,\n      results: []\n    }\n  };\n}\n\n// Build formatted context\nlet context = `Znaleziono ${results.length} wyników z bazy wiedzy:\\n\\n`;\n\nresults.forEach((result, index) => {\n  context += `--- Wynik ${index + 1} (Score: ${(result.score * 100).toFixed(1)}%) ---\\n`;\n  context += `Tytuł: ${result.title}\\n`;\n  context += `URL: ${result.url}\\n`;\n  context += `Typ sekcji: ${result.section_type}\\n`;\n  \n  if (result.publication_date) {\n    context += `Data publikacji: ${result.publication_date}\\n`;\n  }\n  \n  if (result.tags && result.tags.length > 0) {\n    context += `Tagi: ${result.tags.join(', ')}\\n`;\n  }\n  \n  if (result.categories && result.categories.length > 0) {\n    context += `Kategorie: ${result.categories.join(', ')}\\n`;\n  }\n  \n  context += `\\nTreść:\\n${result.text}\\n\\n`;\n});\n\nreturn {\n  json: {\n    context,\n    hasResults: true,\n    resultCount: results.length,\n    results,\n    originalQuestion: $('Webhook: RAG Question1').item.json.body.question\n  }\n};"
+      },
+      "id": "1185f2fe-1676-4240-b9ce-361b158a74d0",
+      "name": "Code: Format RAG Context1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        1528
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "anthropic/claude-3.5-sonnet"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.5
+        }
+      },
+      "id": "c9546432-7099-407b-b6a0-95af5318662c",
+      "name": "OpenRouter: Answer Generator",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2088,
+        1752
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "oUzECR7JM8Hc13Hm",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Code: Format RAG Context1').item.json.originalQuestion }}",
+        "options": {
+          "systemMessage": "=Jesteś pomocnym asystentem AI, który odpowiada na pytania użytkowników w języku polskim na podstawie kontekstu z bazy wiedzy RAG.\n\n=== PYTANIE UŻYTKOWNIKA ===\n{{ $('Code: Format RAG Context1').item.json.originalQuestion }}\n\n=== KONTEKST Z BAZY WIEDZY ===\n{{ $('Code: Format RAG Context1').item.json.context }}\n\n=== INSTRUKCJE ===\n1. Odpowiedz zwięźle i konkretnie w języku polskim\n2. Bazuj TYLKO na dostarczonym kontekście z bazy wiedzy\n3. Cytuj źródła - podawaj tytuły artykułów i linki\n4. Uwzględnij score i daty publikacji w ocenie aktualności informacji\n5. Jeśli kontekst nie zawiera odpowiedzi, powiedz o tym wprost i zasugeruj przeformułowanie pytania\n6. Używaj formatowania markdown dla lepszej czytelności\n7. Jeśli są dostępne checklisty lub key insights, wyróżnij je\n\nOdpowiedz teraz na pytanie użytkownika:"
+        }
+      },
+      "id": "70949f8c-1eae-4907-a20a-53dfd16caff0",
+      "name": "AI Agent: Generate Polish Answer1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2016,
+        1528
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  \"question\": $('Code: Format RAG Context1').item.json.originalQuestion,\n  \"answer\": $json.output,\n  \"sources\": $('Code: Format RAG Context1').item.json.results.map(r => ({\"title\": r.title, \"url\": r.url, \"score\": r.score})),\n  \"sources_count\": $('Code: Format RAG Context1').item.json.resultCount\n} }}",
+        "options": {}
+      },
+      "id": "a4e85aa6-4485-4081-9e6e-93a1002a262f",
+      "name": "Respond to Webhook1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2368,
+        1528
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook: RAG Question1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent: Analyze Question1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter: Analyze Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Analyze Question1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Tool: Build RAG Parameters1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent: Analyze Question1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent: Analyze Question1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent: Analyze Question1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: RAG Search1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: RAG Search1": {
+      "main": [
+        [
+          {
+            "node": "Code: Check API Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Check API Errors": {
+      "main": [
+        [
+          {
+            "node": "Code: Format RAG Context1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Format RAG Context1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent: Generate Polish Answer1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter: Answer Generator": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Generate Polish Answer1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent: Generate Polish Answer1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "b94875d5-1293-4f0c-a11f-1b7ca8c56b7b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f76898e244c6c75ac9fa74d0c043d7df74a1e15d54fc4a7bd0c45c895aeebfe7"
+  },
+  "id": "RdvupXgpcoPIIfavsJvNb",
+  "tags": []
+}

@@ -1,0 +1,15 @@
+# Core web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+
+# Vector database
+qdrant-client>=1.7.0
+
+# Embeddings
+fastembed>=0.3.0
+numpy>=1.24.0
+
+# FastEmbed dependencies (explicitly specified for HF Spaces)
+onnxruntime>=1.16.0
+tokenizers>=0.15.0
