@@ -37,6 +37,18 @@ TOP_K = 20
 RERANK_TOP_K = 5
 RECALL_LIMIT = 100              # how many candidates for first stage
 FINAL_RESULTS_LIMIT = TOP_K     # alias
-ENABLE_GROUPING = False         # group results by field
-GROUP_BY_FIELD = "post_id"      # field to group by
-GROUP_SIZE = 3                  # max results per group
+ENABLE_GROUPING = True          # group results by field
+GROUP_BY_FIELD = "document_id"  # field to group by
+GROUP_SIZE = 1                  # max 1 chunk per article (diversity)
+
+# Vector configuration (używane w qdrant_setup.py)
+DENSE_VECTOR_SIZE = 768
+DENSE_DISTANCE_METRIC = "Cosine"
+COLBERT_VECTOR_SIZE = 96
+COLBERT_DISTANCE_METRIC = "Cosine"
+
+# Memory optimization
+ENABLE_BINARY_QUANTIZATION = True
+DENSE_VECTORS_ON_DISK = True
+COLBERT_VECTORS_ON_DISK = False
+QUANTIZATION_ALWAYS_RAM = True

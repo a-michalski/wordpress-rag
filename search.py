@@ -334,7 +334,7 @@ class HybridSearchEngine:
     def _point_to_result(self, point: ScoredPoint, score: float = None) -> SearchResult:
         """Convert Qdrant point to SearchResult."""
         payload = point.payload
-        
+
         return SearchResult(
             chunk_id=payload.get("chunk_id", ""),
             document_id=payload.get("document_id", ""),
@@ -349,6 +349,51 @@ class HybridSearchEngine:
             tags=payload.get("tags", []),
             chunk_index=payload.get("chunk_index"),
         )
+
+    def get_full_article(self, document_id: str) -> str:
+        """
+        Retrieve and assemble full article from all chunks.
+
+        Args:
+            document_id: ID of the document to retrieve
+
+        Returns:
+            Full article text assembled from all chunks
+        """
+        # Scroll through all points with matching document_id
+        chunks = []
+        offset = None
+
+        while True:
+            results, offset = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id)
+                        )
+                    ]
+                ),
+                limit=100,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+
+            chunks.extend(results)
+
+            if offset is None:
+                break
+
+        # Sort by chunk_index if available
+        chunks_with_index = [(p.payload.get("chunk_index", 999), p.payload.get("text", "")) for p in chunks]
+        chunks_with_index.sort(key=lambda x: x[0])
+
+        # Join all chunk texts
+        full_text = "\n\n".join(text for _, text in chunks_with_index if text)
+
+        return full_text
 
 
 def search(

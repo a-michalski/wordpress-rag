@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  rag-api:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    container_name: rag-search-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Qdrant Cloud credentials (set these via .env file)
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+
+      # Optional: Python optimization
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+    # Resource limits for CX23 (2 vCPU, 4GB RAM)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 3.5G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Networks
+    networks:
+      - rag-network
+
+networks:
+  rag-network:
+    driver: bridge

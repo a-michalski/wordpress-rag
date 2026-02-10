@@ -1,0 +1,29 @@
+# Web framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Core RAG dependencies
+qdrant-client==1.11.3
+fastembed>=0.3.0
+numpy>=1.24.0
+
+# LlamaIndex for semantic chunking
+llama-index-core>=0.10.0
+llama-index-embeddings-fastembed>=0.1.0
+
+# HTML/XML parsing and conversion
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+markdownify>=0.11.6
+
+# Date/time handling
+python-dateutil>=2.8.0
+
+# Progress bars
+tqdm>=4.66.0
+
+# Data structures
+pydantic>=2.0.0
+
+# HTTP client for health checks
+requests>=2.31.0
