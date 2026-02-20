@@ -158,6 +158,7 @@ class DocumentIngester:
         payload = {
             "chunk_id": chunk.chunk_id,
             "document_id": chunk.document_id,
+            "slug": chunk.slug,
             "title": chunk.title,
             "url": chunk.url,
             "author": chunk.author,

@@ -18,9 +18,10 @@ class Chunk:
     """A chunk of text with metadata."""
     chunk_id: str  # document_id + chunk_index
     text: str
-    
+
     # Source document metadata
     document_id: str
+    slug: str
     title: str
     url: str
     author: str
@@ -118,6 +119,7 @@ class SemanticChunker:
                 chunk_id=f"{article.document_id}_{idx}",
                 text=node.text,
                 document_id=article.document_id,
+                slug=article.slug,
                 title=article.title,
                 url=article.url,
                 author=article.author,
