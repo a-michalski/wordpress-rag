@@ -328,7 +328,16 @@ class HybridSearchEngine:
                         match=MatchAny(any=section_types)
                     )
                 )
-        
+
+        # Slug filter (single article)
+        if "slug" in filters and filters["slug"]:
+            conditions.append(
+                FieldCondition(
+                    key="slug",
+                    match=MatchValue(value=filters["slug"])
+                )
+            )
+
         return Filter(must=conditions) if conditions else None
     
     def _point_to_result(self, point: ScoredPoint, score: float = None) -> SearchResult:
