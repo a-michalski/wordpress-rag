@@ -16,6 +16,9 @@ from qdrant_client.models import (
     Range,
     DatetimeRange,
     ScoredPoint,
+    Prefetch,
+    Fusion,
+    SparseVector,
 )
 
 import config
@@ -118,49 +121,64 @@ class HybridSearchEngine:
         filters: Optional[Dict] = None,
     ) -> List[ScoredPoint]:
         """
-        Stage 1: Dense vector search with diversity.
-        
+        Stage 1: Hybrid recall (Dense + Sparse/BM25) with RRF fusion and diversity.
+
         Args:
             query: Search query
             limit: Number of candidates to retrieve
             filters: Optional filters
-            
+
         Returns:
             List of candidate points
         """
-        # Generate dense embedding for query
+        # Generate dense and sparse embeddings
         query_embedding = self.embedder.dense.embed(query)
-        
+        sparse_embedding = self.embedder.sparse.embed(query)
+
         # Build Qdrant filter
         qdrant_filter = self._build_filter(filters) if filters else None
-        
-        # Add grouping if enabled - use search_groups API
+
+        prefetch = [
+            Prefetch(
+                query=query_embedding.tolist(),
+                using="dense",
+                limit=limit,
+            ),
+            Prefetch(
+                query=SparseVector(
+                    indices=sparse_embedding["indices"],
+                    values=sparse_embedding["values"],
+                ),
+                using="sparse",
+                limit=limit,
+            ),
+        ]
+
         if config.ENABLE_GROUPING:
-            # Use search_groups for diversity (max 1 result per document)
-            results = self.client.search_groups(
+            results = self.client.query_points_groups(
                 collection_name=self.collection_name,
-                query_vector=("dense", query_embedding.tolist()),
+                prefetch=prefetch,
+                query=Fusion.RRF,
                 group_by=config.GROUP_BY_FIELD,
                 group_size=config.GROUP_SIZE,
-                limit=limit,  # Number of groups
-                query_filter=qdrant_filter,
-                with_payload=True,
-            )
-            
-            # Flatten groups to points
-            candidates = []
-            for group in results.groups:
-                candidates.extend(group.hits)
-        else:
-            # Standard search without grouping
-            candidates = self.client.search(
-                collection_name=self.collection_name,
-                query_vector=("dense", query_embedding.tolist()),
                 limit=limit,
                 query_filter=qdrant_filter,
                 with_payload=True,
             )
-        
+            candidates = []
+            for group in results.groups:
+                candidates.extend(group.hits)
+        else:
+            results = self.client.query_points(
+                collection_name=self.collection_name,
+                prefetch=prefetch,
+                query=Fusion.RRF,
+                limit=limit,
+                query_filter=qdrant_filter,
+                with_payload=True,
+            )
+            candidates = results.points
+
         return candidates
     
     def _colbert_rerank(
